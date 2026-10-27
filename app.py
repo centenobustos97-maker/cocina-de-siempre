@@ -4,6 +4,7 @@ from zoneinfo import ZoneInfo
 import pandas as pd
 import streamlit as st
 from storage import sales, add_sale, advance, cloud_enabled
+from home import styles, render_home
 ROOT = Path(__file__).parent
 CARTA_PATH = ROOT/'data'/'carta.csv' if (ROOT/'data'/'carta.csv').exists() else ROOT/'carta.csv'
 SHEET_ID = '13PbD43VxDNgPo1dsG3FwsKmUlU7SGUfiBj1cC9oXiL0'
@@ -45,7 +46,7 @@ def refresh_prices():
 with st.sidebar:
     st.title('Cocina de Siempre')
     st.caption('HECHO CON TRADICIÓN')
-    page = st.radio('Mi restaurante', ['Resumen','Datos de venta','Ventas','Cocina','Carta'])
+    page = st.radio('Mi restaurante', ['Inicio','Datos de venta','Ventas','Cocina','Carta'], key='mainnav')
     st.divider()
     st.link_button('Abrir hoja de precios ↗', SHEET_URL)
     if st.button('Actualizar precios de Sheets'):
@@ -57,11 +58,14 @@ with st.sidebar:
     st.caption('Precios: copia de Carta o última actualización manual.')
     st.caption('Ventas compartidas en Google Sheets' if cloud_enabled() else 'Ventas guardadas en este equipo')
 carta = pd.read_csv(CARTA_PATH)
+styles()
 st.caption('MI RESTAURANTE / LOCAL PRINCIPAL')
 heading, action = st.columns([4,1])
 with heading:
-    st.title({'Resumen':'Cocina de Siempre.','Datos de venta':'Tu día, en un vistazo.','Ventas':'Cada venta cuenta.','Cocina':'El corazón de tu cocina.','Carta':'Los sabores de siempre.'}[page])
-    st.caption('Cada plato cuenta. Cada decisión también.')
+    if page != 'Inicio':
+        st.title({'Inicio':'Cocina de Siempre.','Datos de venta':'Tu día, en un vistazo.','Ventas':'Cada venta cuenta.','Cocina':'El corazón de tu cocina.','Carta':'Los sabores de siempre.'}[page])
+    if page != 'Inicio':
+        st.caption('Cada plato cuenta. Cada decisión también.')
 def new_sale():
     available = carta.dropna(subset=['Precio'])
     if available.empty:
@@ -86,8 +90,8 @@ with action:
 if st.session_state.get('show_sale'):
     with st.expander('Registrar venta', expanded=True):
         new_sale()
-if page=='Resumen':
-    st.info('Consulta los filtros, indicadores, gráficos y últimas ventas en Datos de venta, en el menú izquierdo.')
+if page=='Inicio':
+    render_home()
 elif page=='Carta':
     category = st.selectbox('Categoría',['Todas']+carta['Categoría'].unique().tolist())
     view = carta if category=='Todas' else carta[carta['Categoría']==category]
@@ -144,6 +148,7 @@ else:
             st.subheader('Registro de ventas')
         st.dataframe(data.drop(columns=['id']),hide_index=True,width='stretch',column_config={'precio':st.column_config.NumberColumn('Precio unitario',format='S/ %.2f'),'total':st.column_config.NumberColumn('Total',format='S/ %.2f')})
 st.caption('Cada venta conserva su precio histórico. Sin conexión con caja ni SUNAT.')
+
 
 
 
