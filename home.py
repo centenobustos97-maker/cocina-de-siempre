@@ -9,6 +9,15 @@ def photo(name):
 
 def styles():
     st.html('''<style>
+    .st-key-app-shell {animation:cs-arrive .38s cubic-bezier(.22,1,.36,1) both;}
+    .st-key-app-shell button {border-radius:16px;transition:transform .18s cubic-bezier(.22,1,.36,1),background-color .18s ease;touch-action:manipulation;}
+    .st-key-app-shell button:active {transform:scale(.97);}
+    .st-key-app-shell button:focus-visible {outline:3px solid #82a88a;outline-offset:3px;}
+    .cs-loading {display:flex;align-items:center;gap:12px;padding:18px 22px;border-radius:22px;background:#ffffffb8;border:1px solid #36564118;color:#294635;font:500 14px -apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;animation:cs-arrive .3s ease both;}
+    .cs-loading-ring {width:20px;height:20px;border:2px solid #36564125;border-top-color:#365641;border-radius:50%;animation:cs-spin .8s linear infinite;}
+    @keyframes cs-spin {to {transform:rotate(360deg);}}
+    @media(hover:hover) {.st-key-app-shell button:hover {transform:translateY(-1px);}}
+    @media(prefers-reduced-motion:reduce) {.st-key-app-shell,.cs-loading,.cs-loading-ring {animation:none!important;}.st-key-app-shell button {transition:none!important;transform:none!important;}}
     .st-key-mainnav [role="radiogroup"] {gap:8px;}
     .st-key-mainnav label {padding:10px 13px;border-radius:16px;transition:background .25s ease,transform .25s ease;}
     .st-key-mainnav label:hover {background:rgba(255,255,255,.09);transform:translateX(3px);}
@@ -40,8 +49,8 @@ def styles():
     .cs-welcome-mark {width:58px;height:58px;display:grid;place-content:center;border:1px solid #36564126;border-radius:20px;background:#fff9;box-shadow:0 10px 32px #233f3112;font:26px Georgia,serif;animation:cs-breathe .65s ease both;}
     .cs-welcome-name {font:22px Georgia,serif;}
     .cs-welcome-bar {width:70px;height:3px;background:#36564118;border-radius:9px;overflow:hidden;}
-    .cs-welcome-bar::after {content:"";display:block;width:45%;height:100%;background:#365641;border-radius:9px;animation:cs-progress .7s ease-in-out infinite;}
-    @keyframes cs-arrive {from {opacity:0;translate:0 18px;filter:blur(3px);}to {opacity:1;translate:0 0;filter:blur(0);}}
+    .cs-welcome-bar::after {content:"";display:block;width:45%;height:100%;background:#365641;border-radius:9px;animation:cs-progress .7s ease-in-out 2;}
+    @keyframes cs-arrive {from {opacity:0;translate:0 18px;}to {opacity:1;translate:0 0;}}
     @keyframes cs-settle {from {transform:scale(1.06);}to {transform:scale(1);}}
     @keyframes cs-breathe {from {opacity:0;transform:scale(.88);}to {opacity:1;transform:scale(1);}}
     @keyframes cs-progress {from {transform:translateX(-110%);}to {transform:translateX(320%);}}

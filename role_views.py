@@ -40,7 +40,7 @@ def _add_cart(selected):
 def menu_dialog():
     require_role('usuario', 'trabajador')
     try:
-        menu = orders.catalog('Menú')
+        menu = orders.display_catalog('Menú')
         by_key = {item['clave']: item for item in menu}
         left, right = st.columns(2, gap='large')
         with left:
@@ -104,7 +104,7 @@ def render_sale():
         menu_dialog()
     if st.session_state.get('sale_kind', 'carta') == 'carta':
         try:
-            products = orders.catalog('Plato a la carta')
+            products = orders.display_catalog('Plato a la carta')
         except Exception as exc:
             _error(exc)
             return

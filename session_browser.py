@@ -97,7 +97,7 @@ def browser_state():
         default={'result': None}, on_result_change=lambda: None, height=0)
     state = result.result
     if not state or not state.get('ready') or (command and state.get('ack') != command['id']):
-        st.caption('Recuperando tu sesión…')
+        st.html('<div class="cs-loading" role="status"><span class="cs-loading-ring" aria-hidden="true"></span><span>Preparando tu espacio…</span></div>')
         st.stop()
     if command:
         st.session_state.pop('_cookie_command', None)

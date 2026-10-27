@@ -108,6 +108,7 @@ def save_menu(name, price, day, item_id=None, active=True, category=None):
             item_id or str(uuid4()), day.isoformat(), name, float(price),
             'true' if active else 'false', actor, now().isoformat(), category,
         ], value_input_option='RAW')
+        _display_catalog.clear()
 
 
 def catalog(kind):
@@ -133,6 +134,17 @@ def catalog(kind):
         names.add(name)
         result.append({'clave': name, 'nombre': name, 'precio': float(amount(row[2])), 'tipo': kind})
     return result
+
+
+@st.cache_data(ttl=10, max_entries=8, show_spinner=False)
+def _display_catalog(kind, day):
+    return catalog(kind)
+
+
+def display_catalog(kind):
+    # La autorización se comprueba también cuando existe una copia en caché.
+    require_role('usuario', 'trabajador')
+    return _display_catalog(kind, now().date().isoformat())
 
 
 @st.cache_data(ttl=5, show_spinner=False)
