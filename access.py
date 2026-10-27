@@ -38,6 +38,12 @@ def _staff_session():
     if not isinstance(session, dict) or session.get('expires', 0) <= time.time():
         st.session_state.pop('_staff_auth', None)
         raise PermissionError('Inicia sesión con tu usuario y contraseña.')
+    if session.get('token'):
+        from session_browser import restore
+        saved = restore(session['token'])
+        if not saved or saved['username'] != session.get('username') or saved['version'] != session.get('version'):
+            st.session_state.pop('_staff_auth', None)
+            raise PermissionError('La sesión terminó. Vuelve a iniciar sesión.')
     row = _accounts().get(session.get('username'))
     if (not row or row[3] != 'true' or row[4] != session.get('version')
             or row[2] not in ('trabajador', 'cocinero')):
@@ -126,10 +132,14 @@ def login_staff(username, password):
         if not valid:
             raise PermissionError('Usuario o contraseña incorrectos.')
         # Borra datos de cualquier sesión anterior antes de identificar al trabajador.
+        from session_browser import create, queue_cookie
+        expires = now + SESSION_SECONDS
+        token = create(username, account[4], expires)
         _clear_personal_state()
         st.session_state['_staff_auth'] = {
-            'username': username, 'version': account[4], 'expires': now + SESSION_SECONDS,
+            'username': username, 'version': account[4], 'expires': expires, 'token': token,
         }
+        queue_cookie(token, expires)
         return account[2]
 
 
@@ -171,14 +181,33 @@ def save_staff(username, assigned_role, password=None, active=True, create=False
 
 
 def _logout():
+    from session_browser import revoke, queue_cookie
+    session = st.session_state.get('_staff_auth', {})
+    if session.get('token'):
+        revoke(session['token'])
     _clear_personal_state()
-    if st.user.get('is_logged_in', False):
-        st.logout()
-    else:
-        st.rerun()
+    queue_cookie()
+    st.session_state['_after_cookie_logout'] = bool(st.user.get('is_logged_in', False))
+    st.rerun()
 
 
 def require_user():
+    from session_browser import browser_state, restore, create, queue_cookie
+    if not _google_owner() or st.session_state.get('_cookie_command'):
+        try:
+            browser_token = browser_state()
+            if st.session_state.pop('_after_cookie_logout', False):
+                st.logout()
+            if not st.session_state.get('_staff_auth') and browser_token:
+                recovered = restore(browser_token)
+                if recovered:
+                    st.session_state['_staff_auth'] = recovered
+                else:
+                    queue_cookie()
+                    st.rerun()
+        except Exception:
+            st.error('No se pudo recuperar la sesión. Vuelve a intentarlo.')
+            st.stop()
     try:
         current = role()
     except PermissionError:
@@ -216,6 +245,13 @@ def require_user():
                 _clear_personal_state()
                 st.login()
         st.stop()
+    if current in ('trabajador', 'cocinero') and not st.session_state['_staff_auth'].get('token'):
+        # Migra una sesión abierta antes de esta actualización.
+        session = st.session_state['_staff_auth']
+        token = create(session['username'], session['version'], session['expires'])
+        session['token'] = token
+        queue_cookie(token, session['expires'])
+        st.rerun()
     with st.sidebar:
         st.caption(email())
         st.caption({'usuario': 'Usuario · Administrador', 'trabajador': 'Trabajador', 'cocinero': 'Cocinero'}[current])
