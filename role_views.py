@@ -41,27 +41,43 @@ def menu_dialog():
     require_role('usuario', 'trabajador')
     try:
         menu = orders.catalog('Menú')
-        if not menu:
-            st.info('El usuario todavía no ha cargado el menú de hoy.')
-            return
-        st.caption('Selecciona la cantidad de cada plato preparado para hoy.')
-        choices = pd.DataFrame(menu)
-        choices['cantidad'] = 0
-        with st.form('choose_daily_menu'):
-            edited = st.data_editor(choices[['nombre', 'precio', 'cantidad']], hide_index=True,
-                disabled=['nombre', 'precio'], width='stretch',
-                column_config={'nombre': 'Plato', 'precio': st.column_config.NumberColumn('Precio', format='S/ %.2f'),
-                               'cantidad': st.column_config.NumberColumn('Cantidad', min_value=0, max_value=100, step=1)})
-            if st.form_submit_button('Añadir al pedido', type='primary'):
-                if any(pd.isna(q) or float(q) != int(q) for q in edited.cantidad):
-                    st.warning('Las cantidades deben ser números enteros.')
-                    return
-                selected = [dict(menu[i], cantidad=int(row.cantidad)) for i, row in edited.iterrows() if row.cantidad > 0]
-                if not selected:
-                    st.warning('Selecciona al menos un plato.')
-                else:
-                    _add_cart(selected)
-                    st.rerun()
+        by_key = {item['clave']: item for item in menu}
+        left, right = st.columns(2, gap='large')
+        with left:
+            st.subheader('Lista de menú')
+            if menu:
+                st.dataframe(pd.DataFrame(menu)[['nombre', 'precio']], hide_index=True,
+                    width='stretch', column_config={
+                        'nombre': 'Plato del día',
+                        'precio': st.column_config.NumberColumn('Precio', format='S/ %.2f'),
+                    })
+                selected = st.multiselect('Selecciona los platos', list(by_key),
+                    format_func=lambda key: by_key[key]['nombre'], key='menu_selection')
+            else:
+                st.info('Todavía no hay platos cargados para hoy. El administrador puede agregarlos en Menú del día.')
+                selected = []
+        with right:
+            st.subheader('Cantidad y mesa')
+            table = st.number_input('Número de mesa', min_value=1, max_value=999,
+                step=1, key='menu_table')
+            choices = []
+            total = Decimal('0')
+            if selected:
+                for key in selected:
+                    item = by_key[key]
+                    quantity = st.number_input(f"Cantidad · {item['nombre']}",
+                        min_value=1, max_value=100, value=1, step=1, key=f'menu_qty_{key}')
+                    choices.append(dict(item, cantidad=int(quantity)))
+                    total += orders.amount(item['precio']) * int(quantity)
+            else:
+                st.number_input('Cantidad de platos', min_value=1, value=1, step=1,
+                    disabled=True, key='menu_empty_quantity')
+                st.caption('Selecciona uno o varios platos en la lista de la izquierda.')
+            st.metric('Total del menú', f'S/ {total:.2f}')
+            if st.button('Añadir al pedido', type='primary', width='stretch', disabled=not choices):
+                st.session_state.sale_table = int(table)
+                _add_cart(choices)
+                st.rerun()
     except Exception as exc:
         _error(exc)
 
@@ -75,6 +91,7 @@ def render_sale():
     if a.button('Plato a la carta', width='stretch', type='primary'):
         st.session_state.sale_kind = 'carta'
     if b.button('Menú', width='stretch'):
+        st.session_state.menu_table = int(st.session_state.get('sale_table', 1))
         menu_dialog()
     if st.session_state.get('sale_kind', 'carta') == 'carta':
         try:
