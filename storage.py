@@ -36,18 +36,28 @@ def cloud_enabled():
 _local_sales, _local_add_sale, _local_advance = sales, add_sale, advance
 
 def sales():
+    from access import require_role
+    require_role('usuario')
     if cloud_enabled():
         from cloudstore import sales as remote
         return remote()
-    return _local_sales()
+    data = _local_sales()
+    data['trabajador'] = 'Histórico'
+    data['mesa'] = data.referencia.fillna('').astype(str)
+    data['id_pedido'] = data.id
+    return data
 
 def add_sale(*args):
+    from access import require_role
+    require_role('usuario')
     if cloud_enabled():
         from cloudstore import add_sale as remote
         return remote(*args)
     return _local_add_sale(*args)
 
 def advance(order_id):
+    from access import require_role
+    require_role('usuario', 'cocinero')
     if cloud_enabled():
         from cloudstore import advance as remote
         return remote(order_id)

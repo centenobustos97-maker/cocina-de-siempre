@@ -58,7 +58,7 @@ def render_home():
     st.html(f'''<section class="cs-hero" aria-label="Bienvenido a Cocina de Siempre">
       <img class="cs-hero-bg" src="{photo('kitchen-bg.jpg')}" alt="" />
       <div><p class="cs-home-eyebrow">BIENVENIDO A CASA · COCINA DE SIEMPRE</p>
-      <h1>La tradición<br>se sirve <em>cada día.</em></h1>
+      <h1>La cocina<br><em>de siempre.</em></h1>
       <p class="cs-home-copy">Todo listo para un buen día. Tu carta, tus ventas y tu cocina, en un solo lugar.</p>
       <span class="cs-glass-tag"><span class="cs-dot"></span>Hecho con tradición. Llevado con cariño.</span></div>
       <div class="cs-photo-stack"><div class="cs-food-card cs-food-main"><img src="{photo('meal.jpg')}" alt="Plato servido en una sartén sobre una mesa de cocina" /><span class="cs-image-label">El sabor de lo hecho en casa</span></div>

@@ -27,7 +27,9 @@ def tab(name, headers):
         raise ValueError(f'La cabecera de {name} no coincide con el formato de la aplicación.')
     return sheet
 
-def sales():
+def legacy_sales():
+    from access import require_role
+    require_role('usuario', 'cocinero')
     rows=tab('AppVentas',COLUMNS).get_all_values()
     data=pd.DataFrame([r+['']*(len(COLUMNS)-len(r)) for r in rows[1:] if r and r[0]],columns=COLUMNS)
     for col in ['cantidad','precio']:
@@ -41,11 +43,32 @@ def sales():
     data['total']=data.cantidad*data.precio
     return data.sort_values('fecha',ascending=False)
 def add_sale(product,quantity,price,channel,reference,payment):
+    from access import require_role
+    require_role('usuario')
     tab('AppVentas',COLUMNS).append_row([str(uuid4()),datetime.now(ZoneInfo('America/Lima')).isoformat(),product,int(quantity),float(price),channel,reference,payment,'Pendiente'],value_input_option='RAW')
 def advance(order_id):
-    data=sales()
+    from access import require_role
+    require_role('usuario', 'cocinero')
+    data=legacy_sales()
     row=data[data.id==order_id]
     if row.empty or row.iloc[0].estado=='Entregado':
         return
     state='En preparación' if row.iloc[0].estado=='Pendiente' else 'Entregado'
     tab('AppEstados',['id','estado','fecha']).append_row([order_id,state,datetime.now(ZoneInfo('America/Lima')).isoformat()],value_input_option='RAW')
+
+
+def sales():
+    from access import require_role
+    from orders import report_sales
+    require_role('usuario')
+    old = legacy_sales()
+    old['trabajador'] = 'Histórico'
+    old['mesa'] = old.referencia.fillna('').astype(str)
+    old['id_pedido'] = old.id
+    new = report_sales()
+    columns = ['id', 'id_pedido', 'fecha', 'producto', 'cantidad', 'precio', 'canal',
+               'referencia', 'pago', 'estado', 'total', 'trabajador', 'mesa']
+    frames = [frame.reindex(columns=columns) for frame in (old, new) if not frame.empty]
+    if not frames:
+        return pd.DataFrame(columns=columns)
+    return pd.concat(frames, ignore_index=True).sort_values('fecha', ascending=False)

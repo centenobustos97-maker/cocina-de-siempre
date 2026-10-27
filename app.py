@@ -3,13 +3,22 @@ from datetime import datetime, timedelta
 from zoneinfo import ZoneInfo
 import pandas as pd
 import streamlit as st
-from storage import sales, add_sale, advance, cloud_enabled
+from storage import sales, cloud_enabled
 from home import styles, render_home
+from access import require_user
+from role_views import render_sale, render_kitchen, render_menu_admin, render_staff, render_reports
 ROOT = Path(__file__).parent
 CARTA_PATH = ROOT/'data'/'carta.csv' if (ROOT/'data'/'carta.csv').exists() else ROOT/'carta.csv'
 SHEET_ID = '13PbD43VxDNgPo1dsG3FwsKmUlU7SGUfiBj1cC9oXiL0'
 SHEET_URL = f'https://docs.google.com/spreadsheets/d/{SHEET_ID}/edit'
-st.set_page_config(page_title='Cocina de Siempre', page_icon='🍲', layout='wide')
+st.set_page_config(page_title='La cocina de siempre', page_icon='🍲', layout='wide')
+current_role = require_user()
+if current_role == 'trabajador':
+    render_sale()
+    st.stop()
+if current_role == 'cocinero':
+    render_kitchen()
+    st.stop()
 def money(value):
     return f'S/ {value:,.2f}'
 def refresh_prices():
@@ -46,7 +55,7 @@ def refresh_prices():
 with st.sidebar:
     st.title('Cocina de Siempre')
     st.caption('HECHO CON TRADICIÓN')
-    page = st.radio('Mi restaurante', ['Inicio','Datos de venta','Ventas','Cocina','Carta'], key='mainnav')
+    page = st.radio('Mi restaurante', ['Inicio','Datos de venta','Ventas','Cocina','Carta','Menú del día','Personal'], key='mainnav')
     st.divider()
     st.link_button('Abrir hoja de precios ↗', SHEET_URL)
     if st.button('Actualizar precios de Sheets'):
@@ -59,39 +68,36 @@ with st.sidebar:
     st.caption('Ventas compartidas en Google Sheets' if cloud_enabled() else 'Ventas guardadas en este equipo')
 carta = pd.read_csv(CARTA_PATH)
 styles()
-st.caption('MI RESTAURANTE / LOCAL PRINCIPAL')
-heading, action = st.columns([4,1])
-with heading:
-    if page != 'Inicio':
-        st.title({'Inicio':'Cocina de Siempre.','Datos de venta':'Tu día, en un vistazo.','Ventas':'Cada venta cuenta.','Cocina':'El corazón de tu cocina.','Carta':'Los sabores de siempre.'}[page])
-    if page != 'Inicio':
-        st.caption('Cada plato cuenta. Cada decisión también.')
+if page != 'Inicio':
+    st.caption('MI RESTAURANTE / LOCAL PRINCIPAL')
+    heading, action = st.columns([4,1])
+    with heading:
+        st.title({'Datos de venta':'Tu día, en un vistazo.','Ventas':'Cada venta cuenta.',
+                  'Cocina':'El corazón de tu cocina.','Carta':'Los sabores de siempre.',
+                  'Menú del día':'Menú del día','Personal':'Personal'}[page])
+    with action:
+        if st.button('＋ Nueva venta', type='primary'):
+            st.session_state['show_sale'] = True
+
 def new_sale():
-    available = carta.dropna(subset=['Precio'])
-    if available.empty:
-        st.warning('No hay productos con precio definido.')
-        return
-    product = st.selectbox('Producto', available.Producto.tolist())
-    price = float(available.loc[available.Producto==product,'Precio'].iloc[0])
-    st.info(f'Precio unitario: {money(price)}')
-    with st.form('venta'):
-        quantity = st.number_input('Cantidad', min_value=1,max_value=100,value=1,step=1)
-        channel = st.selectbox('Canal', ['Salón','Delivery','Para llevar'])
-        reference = st.text_input('Mesa o referencia',max_chars=100)
-        payment = st.selectbox('Pago', ['Efectivo','Yape','Plin','Tarjeta','Otro'])
-        if st.form_submit_button('Registrar venta',type='primary'):
-            add_sale(product,quantity,price,channel,reference,payment)
-            st.session_state['show_sale'] = False
-            st.rerun()
-    st.caption('Las bebidas sin precio se muestran en Carta; todavía no se pueden vender.')
-with action:
-    if st.button('＋ Nueva venta',type='primary'):
-        st.session_state['show_sale'] = True
+    render_sale()
+
 if st.session_state.get('show_sale'):
     with st.expander('Registrar venta', expanded=True):
         new_sale()
 if page=='Inicio':
     render_home()
+    if st.button('＋ Nueva venta', type='primary', key='home_sale'):
+        st.session_state['show_sale'] = True
+        st.rerun()
+elif page=='Menú del día':
+    render_menu_admin()
+elif page=='Personal':
+    render_staff()
+elif page=='Ventas':
+    render_reports()
+elif page=='Cocina':
+    render_kitchen()
 elif page=='Carta':
     category = st.selectbox('Categoría',['Todas']+carta['Categoría'].unique().tolist())
     view = carta if category=='Todas' else carta[carta['Categoría']==category]
@@ -115,38 +121,26 @@ else:
         if channel!='Todos':
             data = data[data.canal==channel]
     st.download_button('↓ Exportar CSV',data.drop(columns=['id']).to_csv(index=False).encode('utf-8-sig'),'cocina-ventas.csv','text/csv')
-    if page=='Cocina':
-        pending = data[data.estado!='Entregado']
-        if pending.empty:
-            st.success('Todo al día. No hay pedidos pendientes con estos filtros.')
-        for _,order in pending.iterrows():
-            with st.container(border=True):
-                st.subheader(f'{order.cantidad} × {order.producto}')
-                st.write(f'{order.canal} · {order.referencia or "Sin referencia"} · {order.estado}')
-                if st.button('Iniciar preparación' if order.estado=='Pendiente' else 'Marcar entregado',key=order.id):
-                    advance(order.id)
-                    st.rerun()
+    if page=='Datos de venta':
+        total = data.total.sum()
+        for col,label,value in zip(st.columns(4),['Ventas totales','Ventas registradas','Ticket promedio','Productos vendidos'],[money(total),data.id_pedido.nunique(),money(total/data.id_pedido.nunique() if len(data) else 0),int(data.cantidad.sum())]):
+            col.metric(label,value,border=True)
+        left,right = st.columns([3,2])
+        with left:
+            st.subheader('Así van tus ventas')
+            if not data.empty:
+                st.bar_chart(data.groupby(data.fecha.dt.date).total.sum(),color='#8fa77c',y_label='Ingresos (S/)')
+            else:
+                st.info('Registra tu primera venta para ver el gráfico.')
+        with right:
+            st.subheader('Los favoritos de la casa')
+            ranking = data.groupby('producto',as_index=False).agg(Unidades=('cantidad','sum'),Ingresos=('total','sum')).sort_values('Ingresos',ascending=False)
+            st.dataframe(ranking.head(5),hide_index=True,width='stretch')
+        st.subheader('Últimas ventas')
+        data=data.head(5)
     else:
-        if page=='Datos de venta':
-            total = data.total.sum()
-            for col,label,value in zip(st.columns(4),['Ventas totales','Ventas registradas','Ticket promedio','Productos vendidos'],[money(total),len(data),money(total/len(data) if len(data) else 0),int(data.cantidad.sum())]):
-                col.metric(label,value,border=True)
-            left,right = st.columns([3,2])
-            with left:
-                st.subheader('Así van tus ventas')
-                if not data.empty:
-                    st.bar_chart(data.groupby(data.fecha.dt.date).total.sum(),color='#8fa77c',y_label='Ingresos (S/)')
-                else:
-                    st.info('Registra tu primera venta para ver el gráfico.')
-            with right:
-                st.subheader('Los favoritos de la casa')
-                ranking = data.groupby('producto',as_index=False).agg(Unidades=('cantidad','sum'),Ingresos=('total','sum')).sort_values('Ingresos',ascending=False)
-                st.dataframe(ranking.head(5),hide_index=True,width='stretch')
-            st.subheader('Últimas ventas')
-            data=data.head(5)
-        else:
-            st.subheader('Registro de ventas')
-        st.dataframe(data.drop(columns=['id']),hide_index=True,width='stretch',column_config={'precio':st.column_config.NumberColumn('Precio unitario',format='S/ %.2f'),'total':st.column_config.NumberColumn('Total',format='S/ %.2f')})
+        st.subheader('Registro de ventas')
+    st.dataframe(data.drop(columns=['id']),hide_index=True,width='stretch',column_config={'precio':st.column_config.NumberColumn('Precio unitario',format='S/ %.2f'),'total':st.column_config.NumberColumn('Total',format='S/ %.2f')})
 st.caption('Cada venta conserva su precio histórico. Sin conexión con caja ni SUNAT.')
 
 
