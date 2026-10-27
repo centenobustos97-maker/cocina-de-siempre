@@ -11,6 +11,7 @@ COLUMNS=['id','fecha','producto','cantidad','precio','canal','referencia','pago'
 def workbook():
     client=gspread.service_account_from_dict(dict(st.secrets['gcp_service_account']))
     return client.open_by_key(SHEET_ID)
+@st.cache_resource(ttl=300, show_spinner=False)
 def tab(name, headers):
     book=workbook()
     try:
@@ -21,9 +22,11 @@ def tab(name, headers):
         except gspread.exceptions.APIError:
             sheet=book.worksheet(name)
     # A single header row is safe to write identically from concurrent sessions.
-    if not sheet.row_values(1):
+    actual_headers = sheet.row_values(1)
+    if not actual_headers:
         sheet.update([headers],range_name='A1',value_input_option='RAW')
-    if sheet.row_values(1)!=headers:
+        actual_headers = headers
+    if actual_headers != headers:
         raise ValueError(f'La cabecera de {name} no coincide con el formato de la aplicación.')
     return sheet
 

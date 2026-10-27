@@ -23,6 +23,7 @@ def _google_owner():
             and str(st.user.get('email', '')).strip().lower() == OWNER)
 
 
+@st.cache_data(ttl=5, show_spinner=False)
 def _accounts():
     from cloudstore import tab
     latest = {}
@@ -45,19 +46,26 @@ def _staff_session():
     return row
 
 
+def _principal():
+    if _google_owner():
+        return OWNER, 'usuario'
+    account = _staff_session()
+    return account[0], account[2]
+
+
 def email():
-    # Conserva la interfaz usada por pedidos: correo del dueño o usuario del personal.
-    return OWNER if _google_owner() else _staff_session()[0]
+    return _principal()[0]
 
 
 def role():
-    return 'usuario' if _google_owner() else _staff_session()[2]
+    return _principal()[1]
 
 
 def require_role(*allowed):
-    if role() not in allowed:
+    actor, current = _principal()
+    if current not in allowed:
         raise PermissionError('Tu rol no permite esta operación.')
-    return email()
+    return actor
 
 
 def _password_hash(password, salt=None):
@@ -155,6 +163,7 @@ def save_staff(username, assigned_role, password=None, active=True, create=False
             username, encoded, assigned_role, 'true' if active else 'false', str(uuid4()),
             datetime.now(timezone.utc).isoformat(), actor,
         ], value_input_option='RAW')
+        _accounts.clear()
         # Un cambio de contraseña del dueño permite entrar sin conservar un bloqueo previo.
         if password is not None:
             tab('AppPersonalIntentos', ATTEMPT_HEADERS).append_row(

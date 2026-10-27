@@ -12,7 +12,15 @@ def _error(exc):
     if isinstance(exc, (PermissionError, ValueError)):
         st.error(str(exc))
     else:
-        st.error('No se pudo completar la operación en Google Sheets. Vuelve a intentarlo.')
+        import logging
+        status = getattr(getattr(exc, 'response', None), 'status_code', None)
+        logging.getLogger('cocina').warning('Sheets operation failed: type=%s status=%s', type(exc).__name__, status)
+        if status == 429:
+            st.warning('Google Sheets está recibiendo demasiadas consultas. Espera un minuto y vuelve a intentarlo.')
+        elif status in (401, 403):
+            st.error('Google Sheets rechazó el acceso. El administrador debe revisar las credenciales y el permiso de edición de la hoja.')
+        else:
+            st.error('No se pudo cargar Google Sheets. Inténtalo nuevamente en unos segundos.')
 
 
 def _add_cart(selected):

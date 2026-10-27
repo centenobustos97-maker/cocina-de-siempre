@@ -91,6 +91,7 @@ def catalog(kind):
     return result
 
 
+@st.cache_data(ttl=5, show_spinner=False)
 def _all_orders():
     rows = tab('AppPedidos', ORDER_HEADERS).get_all_values()[1:]
     data = pd.DataFrame([row + [''] * (len(ORDER_HEADERS) - len(row)) for row in rows if row and row[0]], columns=ORDER_HEADERS)
@@ -122,6 +123,7 @@ def submit_order(table, items, payment, request_id, quoted_total):
     if not items or len(items) > 30:
         raise ValueError('Añade entre 1 y 30 platos al pedido.')
     with WRITE_LOCK:
+        _all_orders.clear()
         existing = _all_orders()
         previous = existing[existing.pedido == request_id]
         if not previous.empty:
@@ -150,12 +152,14 @@ def submit_order(table, items, payment, request_id, quoted_total):
             raise ValueError('Cambió un precio. Actualiza el pedido antes de enviarlo.')
         # Un único append para todas las líneas; precios e identidad se resuelven en servidor.
         tab('AppPedidos', ORDER_HEADERS).append_rows(rows, value_input_option='RAW')
+        _all_orders.clear()
         return request_id
 
 
 def mark_ready(order_ids):
     cook = require_role('usuario', 'cocinero')
     with WRITE_LOCK:
+        _all_orders.clear()
         data = _all_orders()
         pending = set(data.loc[data.estado == 'pendiente', 'pedido'])
         targets = set(order_ids)
@@ -164,6 +168,7 @@ def mark_ready(order_ids):
         rows = [[key, now().isoformat(), 'listo', cook] for key in sorted(targets & pending)]
         if rows:
             tab('AppPedidoEstados', STATE_HEADERS).append_rows(rows, value_input_option='RAW')
+            _all_orders.clear()
 
 
 def report_sales():
