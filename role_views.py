@@ -26,7 +26,7 @@ def _error(exc):
 def _add_cart(selected):
     cart = list(st.session_state.get('sale_cart', []))
     for item in selected:
-        current = next((p for p in cart if (p['tipo'], p['clave']) == (item['tipo'], item['clave'])), None)
+        current = next((p for p in cart if (p['tipo'], p['clave'], tuple(sorted(p.get('acompanamientos', [])))) == (item['tipo'], item['clave'], tuple(sorted(item.get('acompanamientos', []))))), None)
         if current:
             current['cantidad'] = min(100, current['cantidad'] + int(item['cantidad']))
             current['precio'] = item['precio']
@@ -44,18 +44,27 @@ def menu_dialog():
         by_key = {item['clave']: item for item in menu}
         left, right = st.columns(2, gap='large')
         with left:
-            st.subheader('Lista de menú')
-            if menu:
-                st.dataframe(pd.DataFrame(menu)[['nombre', 'precio']], hide_index=True,
-                    width='stretch', column_config={
-                        'nombre': 'Plato del día',
-                        'precio': st.column_config.NumberColumn('Precio', format='S/ %.2f'),
-                    })
-                selected = st.multiselect('Selecciona los platos', list(by_key),
-                    format_func=lambda key: by_key[key]['nombre'], key='menu_selection')
-            else:
+            st.subheader('Arma tu menú')
+            st.caption('El precio del segundo incluye caldo/sopa y entrada.')
+            accompanying, selected = [], []
+            if not menu:
                 st.info('Todavía no hay platos cargados para hoy. El administrador puede agregarlos en Menú del día.')
-                selected = []
+            for category in ('Caldo / sopa', 'Entrada'):
+                keys = [key for key, item in by_key.items() if item['categoria'] == category]
+                if keys:
+                    key = st.pills(category + ' · incluido', keys, selection_mode='single',
+                        format_func=lambda k: by_key[k]['nombre'], key=f'menu_quick_{category}')
+                    if key:
+                        accompanying.append(key)
+                elif menu:
+                    st.caption(f'{category}: sin opciones cargadas para hoy.')
+            seconds = [key for key, item in by_key.items() if item['categoria'] == 'Segundo']
+            if seconds:
+                selected = st.pills('Segundos del día · selección rápida', seconds, selection_mode='multi',
+                    format_func=lambda k: f"{by_key[k]['nombre']} · S/ {by_key[k]['precio']:.2f}",
+                    key='menu_quick_seconds') or []
+            elif menu:
+                st.warning('El administrador debe cargar al menos un segundo para vender el menú.')
         with right:
             st.subheader('Cantidad y mesa')
             table = st.number_input('Número de mesa', min_value=1, max_value=999,
@@ -67,12 +76,12 @@ def menu_dialog():
                     item = by_key[key]
                     quantity = st.number_input(f"Cantidad · {item['nombre']}",
                         min_value=1, max_value=100, value=1, step=1, key=f'menu_qty_{key}')
-                    choices.append(dict(item, cantidad=int(quantity)))
+                    choices.append(dict(item, tipo='Menú completo', nombre=orders.combo_name(item, accompanying, by_key), acompanamientos=list(accompanying), cantidad=int(quantity)))
                     total += orders.amount(item['precio']) * int(quantity)
             else:
                 st.number_input('Cantidad de platos', min_value=1, value=1, step=1,
                     disabled=True, key='menu_empty_quantity')
-                st.caption('Selecciona uno o varios platos en la lista de la izquierda.')
+                st.caption('Elige los acompañamientos y uno o varios segundos a la izquierda.')
             st.metric('Total del menú', f'S/ {total:.2f}')
             if st.button('Añadir al pedido', type='primary', width='stretch', disabled=not choices):
                 st.session_state.sale_table = int(table)
@@ -129,7 +138,7 @@ def render_sale():
             st.warning('Cada cantidad debe ser un número entero.')
             return
         quantity = int(row.Cantidad)
-        chosen.append({'tipo': cart[i]['tipo'], 'clave': cart[i]['clave'], 'cantidad': quantity})
+        chosen.append({'tipo': cart[i]['tipo'], 'clave': cart[i]['clave'], 'cantidad': quantity, 'acompanamientos': cart[i].get('acompanamientos', [])})
         total += orders.amount(cart[i]['precio']) * quantity
     st.metric('Total a cobrar', f'S/ {total:.2f}')
     st.session_state.setdefault('sale_request', str(uuid4()))
@@ -177,6 +186,7 @@ def render_kitchen():
 def render_menu_admin():
     require_role('usuario')
     st.header('Menú del día')
+    st.caption('El segundo fija el precio del menú. Caldo/sopa y entrada están incluidos; puedes asignarles precio 0.')
     day = st.date_input('Día del menú', value=orders.now().date())
     try:
         menu = orders.daily_menu(day)
@@ -185,22 +195,24 @@ def render_menu_admin():
         return
     with st.form('new_menu_item', clear_on_submit=True):
         name = st.text_input('Nombre del plato', max_chars=100)
-        price = st.number_input('Precio (S/)', min_value=0.01, max_value=10000.0, value=12.0, step=0.5)
+        category = st.selectbox('Tipo de plato', list(orders.MENU_CATEGORIES), index=2)
+        price = st.number_input('Precio (S/)', min_value=0.0, max_value=10000.0, value=12.0, step=0.5)
         if st.form_submit_button('Agregar plato', type='primary'):
             try:
-                orders.save_menu(name, price, day)
+                orders.save_menu(name, price, day, category=category)
             except Exception as exc:
                 _error(exc)
             else:
                 st.rerun()
     for item in menu:
-        with st.expander(f"{item['nombre']} · S/ {item['precio']:.2f}"):
+        with st.expander(f"{item['categoria']} · {item['nombre']} · S/ {item['precio']:.2f}"):
             with st.form(f"edit_menu_{item['clave']}"):
                 name = st.text_input('Nombre', value=item['nombre'], max_chars=100)
-                price = st.number_input('Precio', min_value=0.01, max_value=10000.0, value=item['precio'], step=0.5)
+                category = st.selectbox('Tipo de plato', list(orders.MENU_CATEGORIES), index=orders.MENU_CATEGORIES.index(item['categoria']))
+                price = st.number_input('Precio', min_value=0.0, max_value=10000.0, value=item['precio'], step=0.5)
                 if st.form_submit_button('Guardar cambios'):
                     try:
-                        orders.save_menu(name, price, day, item['clave'])
+                        orders.save_menu(name, price, day, item['clave'], category=category)
                     except Exception as exc:
                         _error(exc)
                     else:

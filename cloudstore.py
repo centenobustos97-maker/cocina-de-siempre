@@ -26,6 +26,12 @@ def tab(name, headers):
     if not actual_headers:
         sheet.update([headers],range_name='A1',value_input_option='RAW')
         actual_headers = headers
+    # Ampliación compatible: conserva las siete columnas y filas anteriores del menú.
+    if name == 'AppMenuDia' and headers[-1:] == ['categoria'] and actual_headers == headers[:-1]:
+        if sheet.col_count < len(headers):
+            sheet.add_cols(len(headers) - sheet.col_count)
+        sheet.update([['categoria']], range_name='H1', value_input_option='RAW')
+        actual_headers = headers
     if actual_headers != headers:
         raise ValueError(f'La cabecera de {name} no coincide con el formato de la aplicación.')
     return sheet
