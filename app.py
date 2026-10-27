@@ -45,7 +45,7 @@ def refresh_prices():
 with st.sidebar:
     st.title('Cocina de Siempre')
     st.caption('HECHO CON TRADICIÓN')
-    page = st.radio('Mi restaurante', ['Resumen','Ventas','Cocina','Carta'])
+    page = st.radio('Mi restaurante', ['Resumen','Datos de venta','Ventas','Cocina','Carta'])
     st.divider()
     st.link_button('Abrir hoja de precios ↗', SHEET_URL)
     if st.button('Actualizar precios de Sheets'):
@@ -60,7 +60,7 @@ carta = pd.read_csv(CARTA_PATH)
 st.caption('MI RESTAURANTE / LOCAL PRINCIPAL')
 heading, action = st.columns([4,1])
 with heading:
-    st.title({'Resumen':'Tu día, en un vistazo.','Ventas':'Cada venta cuenta.','Cocina':'El corazón de tu cocina.','Carta':'Los sabores de siempre.'}[page])
+    st.title({'Resumen':'Cocina de Siempre.','Datos de venta':'Tu día, en un vistazo.','Ventas':'Cada venta cuenta.','Cocina':'El corazón de tu cocina.','Carta':'Los sabores de siempre.'}[page])
     st.caption('Cada plato cuenta. Cada decisión también.')
 def new_sale():
     available = carta.dropna(subset=['Precio'])
@@ -86,7 +86,9 @@ with action:
 if st.session_state.get('show_sale'):
     with st.expander('Registrar venta', expanded=True):
         new_sale()
-if page=='Carta':
+if page=='Resumen':
+    st.info('Consulta los filtros, indicadores, gráficos y últimas ventas en Datos de venta, en el menú izquierdo.')
+elif page=='Carta':
     category = st.selectbox('Categoría',['Todas']+carta['Categoría'].unique().tolist())
     view = carta if category=='Todas' else carta[carta['Categoría']==category]
     st.dataframe(view,hide_index=True,width='stretch',column_config={'Precio':st.column_config.NumberColumn('Precio (S/)',format='S/ %.2f')})
@@ -121,7 +123,7 @@ else:
                     advance(order.id)
                     st.rerun()
     else:
-        if page=='Resumen':
+        if page=='Datos de venta':
             total = data.total.sum()
             for col,label,value in zip(st.columns(4),['Ventas totales','Ventas registradas','Ticket promedio','Productos vendidos'],[money(total),len(data),money(total/len(data) if len(data) else 0),int(data.cantidad.sum())]):
                 col.metric(label,value,border=True)
@@ -142,6 +144,7 @@ else:
             st.subheader('Registro de ventas')
         st.dataframe(data.drop(columns=['id']),hide_index=True,width='stretch',column_config={'precio':st.column_config.NumberColumn('Precio unitario',format='S/ %.2f'),'total':st.column_config.NumberColumn('Total',format='S/ %.2f')})
 st.caption('Cada venta conserva su precio histórico. Sin conexión con caja ni SUNAT.')
+
 
 
 
