@@ -218,7 +218,7 @@ def render_staff():
         with st.expander(label):
             with st.form(f'edit_staff_{username}', clear_on_submit=True):
                 assigned = st.selectbox('Rol', ['trabajador', 'cocinero'], index=0 if entry['Rol']=='trabajador' else 1)
-                active = st.checkbox('Cuenta activa', value=entry['Activo'])
+                active = st.selectbox('Estado de la cuenta', ['Activa', 'Desactivada'], index=0 if entry['Activo'] else 1) == 'Activa'
                 password = st.text_input('Nueva contraseña (opcional)', type='password', max_chars=128, help='Deja vacío para conservar la actual. Mínimo 12 caracteres.')
                 if st.form_submit_button('Guardar cambios'):
                     try:
@@ -253,3 +253,4 @@ def render_reports():
     st.metric('Ventas del filtro', f'S/ {data.total.sum():.2f}')
     st.dataframe(data[['fecha', 'id_pedido', 'mesa', 'producto', 'cantidad', 'precio', 'total', 'trabajador', 'estado']], hide_index=True, width='stretch')
     st.download_button('Exportar ventas', data.to_csv(index=False).encode('utf-8-sig'), 'ventas.csv', 'text/csv')
+
