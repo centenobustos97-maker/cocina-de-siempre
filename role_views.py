@@ -5,7 +5,7 @@ from uuid import uuid4
 import pandas as pd
 import streamlit as st
 import orders
-from access import require_role, authorized_emails, set_access
+from access import require_role, staff_accounts, save_staff
 
 
 def _error(exc):
@@ -192,26 +192,41 @@ def render_menu_admin():
 def render_staff():
     require_role('usuario')
     st.header('Trabajadores y cocineros')
-    with st.form('authorize_email', clear_on_submit=True):
-        address = st.text_input('Correo de Google')
+    st.caption('Crea cuentas con usuario y contraseña. El administrador conserva su acceso con Google.')
+    with st.form('create_staff', clear_on_submit=True):
+        username = st.text_input('Usuario', max_chars=40, help='Ejemplo: mozo01 o cocina01')
+        password = st.text_input('Contraseña inicial', type='password', max_chars=128, help='Mínimo 12 caracteres')
         assigned = st.selectbox('Rol', ['trabajador', 'cocinero'])
-        if st.form_submit_button('Autorizar correo', type='primary'):
+        if st.form_submit_button('Crear usuario', type='primary'):
             try:
-                set_access(address, assigned)
+                save_staff(username, assigned, password, create=True)
             except Exception as exc:
                 _error(exc)
             else:
+                st.success('Usuario creado. Entrega sus credenciales directamente a esa persona.')
                 st.rerun()
     try:
-        entries = authorized_emails()
-        for entry in entries:
-            a, b = st.columns([4, 1])
-            a.write(f"{entry['Correo']} · {entry['Rol']}")
-            if b.button('Quitar', key=f"revoke_{entry['Correo']}"):
-                set_access(entry['Correo'], entry['Rol'], active=False)
-                st.rerun()
+        entries = staff_accounts()
     except Exception as exc:
         _error(exc)
+        return
+    if not entries:
+        st.info('Crea las cuentas del personal aquí. Los correos anteriores no se convierten automáticamente en usuarios.')
+    for entry in entries:
+        username = entry['Usuario']
+        label = f"{username} · {entry['Rol']} · {'Activo' if entry['Activo'] else 'Desactivado'}"
+        with st.expander(label):
+            with st.form(f'edit_staff_{username}', clear_on_submit=True):
+                assigned = st.selectbox('Rol', ['trabajador', 'cocinero'], index=0 if entry['Rol']=='trabajador' else 1)
+                active = st.checkbox('Cuenta activa', value=entry['Activo'])
+                password = st.text_input('Nueva contraseña (opcional)', type='password', max_chars=128, help='Deja vacío para conservar la actual. Mínimo 12 caracteres.')
+                if st.form_submit_button('Guardar cambios'):
+                    try:
+                        save_staff(username, assigned, password or None, active=active)
+                    except Exception as exc:
+                        _error(exc)
+                    else:
+                        st.rerun()
 
 
 def render_reports():
